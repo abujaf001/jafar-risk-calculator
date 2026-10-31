@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827">
+<meta name="description" content="Three-input crypto futures position size and risk calculator.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Jafar Risk Calculator</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d2e;--line:#29374b;--muted:#9aabc0;--text:#f4f7fb;--accent:#58a6ff;--green:#25c58a;--red:#ff7373}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#101c30,#090f1b 65%);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
+main{max-width:560px;margin:0 auto;padding:26px 17px 40px}.brand{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+h1{font-size:27px;margin:7px 0 5px}.sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+.card{background:rgba(18,29,46,.96);border:1px solid var(--line);border-radius:18px;padding:18px;margin:14px 0}
+label{display:block;font-size:13px;font-weight:650;color:#c8d4e3;margin:0 0 7px}
+input{width:100%;padding:14px 13px;border-radius:11px;border:1px solid #3a4a60;background:#0b1422;color:white;font-size:17px;outline:none;margin-bottom:15px}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #58a6ff22}
+button{width:100%;border:0;border-radius:12px;padding:14px;background:var(--accent);color:#071321;font-weight:800;font-size:16px;cursor:pointer}
+.badge{display:inline-block;padding:7px 13px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.06em;background:#27364a;color:#dce8f5}
+.badge.long{background:#123d34;color:#6ff0bf}.badge.short{background:#49252d;color:#ffaaaa}
+.result-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.big{font-size:30px;font-weight:850;letter-spacing:-.03em;overflow-wrap:anywhere;margin:8px 0 2px}
+.muted{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.metric{background:#0b1422;border:1px solid #26364b;border-radius:12px;padding:13px;min-width:0}
+.metric .value{font-size:17px;font-weight:750;overflow-wrap:anywhere;margin-top:5px}
+.section-label{font-size:13px;color:var(--muted);font-weight:700;margin:18px 0 8px}
+.margin-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #29374b;font-size:14px}
+.margin-row:last-child{border:0}.margin-row strong{font-variant-numeric:tabular-nums}
+.note{font-size:12px;line-height:1.55;color:var(--muted);margin:14px 2px 0}
+#error{color:#ff9999;font-size:13px;min-height:18px;margin-top:9px}
+footer{text-align:center;color:#75869d;font-size:12px;margin-top:22px}
+@media(max-width:360px){.big{font-size:25px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">Crypto futures tool</div>
+  <h1>Jafar Risk Calculator</h1>
+  <p class="sub">Know your position size before you enter a trade.</p>
+  <section class="card">
+    <form id="calcForm">
+      <label for="risk">Risk amount (USDT)</label>
+      <input id="risk" type="number" min="0.00000001" step="any" inputmode="decimal" placeholder="e.g. 10" required>
+      <label for="entry">Entry price</label>
+      <input id="entry" type="number" min="0.00000001" step="any" inputmode="decimal" placeholder="e.g. 0.5000" required>
+      <label for="stop">Stop-loss price</label>
+      <input id="stop" type="number" min="0.00000001" step="any" inputmode="decimal" placeholder="e.g. 0.4800" required>
+      <button type="submit">Calculate position</button>
+      <div id="error" role="alert"></div>
+    </form>
+  </section>
+  <section id="output" class="card" hidden aria-live="polite">
+    <div class="result-title"><span class="muted">DETECTED DIRECTION</span><span id="side" class="badge">—</span></div>
+    <div class="section-label">Position size</div>
+    <div class="big" id="notional">—</div>
+    <div class="muted">USDT notional value, before leverage</div>
+    <div class="grid">
+      <div class="metric"><div class="muted">Coin quantity</div><div class="value" id="qty">—</div></div>
+      <div class="metric"><div class="muted">Stop distance</div><div class="value" id="distance">—</div></div>
+      <div class="metric"><div class="muted">Planned loss</div><div class="value" id="loss">—</div></div>
+      <div class="metric"><div class="muted">Entry / Stop</div><div class="value" id="levels">—</div></div>
+    </div>
+    <div class="section-label">Estimated initial margin</div>
+    <div class="margin-row"><span>5× leverage</span><strong id="m5">—</strong></div>
+    <div class="margin-row"><span>10× leverage</span><strong id="m10">—</strong></div>
+    <div class="margin-row"><span>20× leverage</span><strong id="m20">—</strong></div>
+    <p class="note">Margin estimates are position value ÷ leverage. Leverage changes the margin required, not the position size or planned price-loss amount. Calculations assume a linear USDT-margined contract. Actual loss and margin can differ because of trading fees, slippage, funding, maintenance margin and exchange rules. Check the exchange order preview before submitting.</p>
+  </section>
+  <footer>Runs on your device. After installation, the calculator works offline.</footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString('en-US',{maximumFractionDigits:10});
+$('calcForm').addEventListener('submit', e => {
+  e.preventDefault(); $('error').textContent=''; $('output').hidden=true;
+  const risk=Number($('risk').value), entry=Number($('entry').value), stop=Number($('stop').value);
+  if (![risk,entry,stop].every(Number.isFinite) || risk<=0 || entry<=0 || stop<=0) {
+    $('error').textContent='Enter three valid numbers greater than zero.'; return;
+  }
+  if (entry===stop) {$('error').textContent='Entry and stop-loss cannot be the same.';return;}
+  const distance=Math.abs(entry-stop), quantity=risk/distance, position=quantity*entry;
+  if (![quantity,position].every(Number.isFinite)) {$('error').textContent='The values are too large to calculate. Check your inputs.';return;}
+  const side=stop<entry?'LONG':'SHORT';
+  $('side').textContent=side; $('side').className='badge '+side.toLowerCase();
+  $('notional').textContent=fmt(position)+' USDT';
+  $('qty').textContent=fmt(quantity);
+  $('distance').textContent=fmt(distance)+' ('+fmt(distance/entry*100)+'%)';
+  $('loss').textContent=fmt(risk)+' USDT';
+  $('levels').textContent=fmt(entry)+' / '+fmt(stop);
+  $('m5').textContent=fmt(position/5)+' USDT';
+  $('m10').textContent=fmt(position/10)+' USDT';
+  $('m20').textContent=fmt(position/20)+' USDT';
+  $('output').hidden=false;
+});
+if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
